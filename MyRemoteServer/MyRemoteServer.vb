@@ -5,7 +5,7 @@ Imports System.Security
 Imports System.Threading
 
 
-Module Module1
+Module MyRemoteServer
 
     Dim server As TcpListener
     Dim port As Int32
@@ -19,6 +19,7 @@ Module Module1
         ' Buffer for reading data
         Dim bytes(256) As Byte
         Dim data As String = Nothing
+        Dim shutdown As Boolean = False
 
         Try
             ' Enter the listening loop.
@@ -31,6 +32,7 @@ Module Module1
 
                 Try
                     data = Nothing
+                    shutdown = False
 
                     ' Get a stream object for reading and writing
                     Dim stream As NetworkStream = client.GetStream()
@@ -60,12 +62,21 @@ Module Module1
                             End If
 
                         Case "SHUTDOWN"
-                            sw.WriteLine("Shutdown ok")
+                            sw.WriteLine("Shutting down")
+                            shutdown = True
+                        Case Else
+                            sw.WriteLine("Operation unknown")
+
                     End Select
                     sw.Flush()
 
                     ' Shutdown and end connection
                     client.Close()
+
+                    If (shutdown) Then
+                        System.Diagnostics.Process.Start("shutdown", "-s -t 00")
+                    End If
+
                 Catch e As Exception
                 End Try
 
@@ -79,6 +90,17 @@ Module Module1
 
     End Sub
 
+    Private Function GetIPv4Address() As IPAddress
+        GetIPv4Address = Nothing
+        Dim strHostName As String = System.Net.Dns.GetHostName()
+        Dim iphe As System.Net.IPHostEntry = System.Net.Dns.GetHostEntry(strHostName)
+
+        For Each ipheal As System.Net.IPAddress In iphe.AddressList
+            If ipheal.AddressFamily = System.Net.Sockets.AddressFamily.InterNetwork Then
+                GetIPv4Address = ipheal
+            End If
+        Next
+    End Function
 
     Sub Main()
 
@@ -88,18 +110,22 @@ Module Module1
         Try
             ' Set the TcpListener on port 13000.
             port = 13000
-            localAddr = IPAddress.Parse("192.168.1.33")
 
-            server = New TcpListener(localAddr, port)
+            localAddr = GetIPv4Address()
 
-            ' Start listening for client requests.
-            server.Start()
+            If (localAddr IsNot Nothing) Then
 
-            ' Begin accepting connections...
+                server = New TcpListener(localAddr, port)
 
-            t = New Thread(AddressOf AcceptConnections)
-            t.Start()
+                ' Start listening for client requests.
+                server.Start()
 
+                ' Begin accepting connections...
+
+                t = New Thread(AddressOf AcceptConnections)
+                t.Start()
+
+            End If
 
         Catch e As SocketException
             Console.WriteLine("SocketException: {0}", e)
